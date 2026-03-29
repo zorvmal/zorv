@@ -356,16 +356,32 @@ def admin_login():
         (username, pwd_hash)
     )
     user = cursor.fetchone()
-    conn.close()
 
     if user:
+        conn.close()
         return jsonify({
             "success": True,
             "token": ADMIN_SECRET,
             "username": username
         })
-    else:
-        return jsonify({"success": False, "error": "Credenciais inválidas"}), 401
+
+    # Fallback: se a senha da variável de ambiente mudou, aceitar e atualizar o banco
+    if username == 'admin' and password == ADMIN_PASSWORD:
+        new_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+        cursor.execute(
+            'UPDATE admin_users SET password_hash = ? WHERE username = ?',
+            (new_hash, 'admin')
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "token": ADMIN_SECRET,
+            "username": username
+        })
+
+    conn.close()
+    return jsonify({"success": False, "error": "Credenciais inválidas"}), 401
 
 @app.route('/api/admin/keys', methods=['GET'])
 @require_admin
